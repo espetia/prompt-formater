@@ -1,50 +1,50 @@
 # Prompt Manager WebApp
 
-Una aplicación web creada con Streamlit para ayudarte a estructurar, organizar y guardar tus prompts de forma sencilla.
+A web application built with Streamlit to help you easily structure, organize, and save your prompts.
 
-## Características
+## Features
 
-- 📝 **Estructura Organizacional:** Divide tus pensamientos en secciones clave (Objetivo, Pasos, Consideraciones).
-- 💾 **Persistencia (SQLite):** Guarda tus prompts localmente para su uso futuro.
-- 📋 **Exportación en Markdown:** Genera el texto en formato Markdown y cópialo al portapapeles con un solo botón.
-- 📚 **Historial Lateral:** Accede rápidamente a tus comandos anteriores desde la barra lateral.
-- 🐳 **Dockerizado:** Listo para ser desplegado en un contenedor.
+- 📝 **Organizational Structure:** Divide your thoughts into key sections (Objective, Steps, Considerations).
+- 💾 **Persistence (SQLite):** Save your prompts locally for future use.
+- 📋 **Markdown Export:** Generate text in Markdown format and copy it to the clipboard with a single button.
+- 📚 **Sidebar History:** Quickly access your previous prompts from the sidebar.
+- 🐳 **Dockerized:** Ready to be deployed in a container.
 
-## Requisitos
+## Requirements
 
-- Python 3.8 o superior (para ejecutar locamente)
-- Docker (si se desea ejecutar en contenedor)
+- Python 3.8 or higher (to run locally)
+- Docker (if you want to run it in a container)
 
-## Ejecutar localmente con Python
+## Run Locally with Python
 
-1. Crea y activa un entorno virtual (opcional pero recomendado):
+1. Create and activate a virtual environment (optional but recommended):
    ```bash
    python -m venv venv
-   source venv/bin/activate  # En Linux/Mac
-   # venv\Scripts\activate   # En Windows
+   source venv/bin/activate  # On Linux/Mac
+   # venv\Scripts\activate   # On Windows
    ```
 
-2. Instala las dependencias:
+2. Install the dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-3. Ejecuta la aplicación:
+3. Run the application:
    ```bash
    streamlit run app.py
    ```
 
-4. Abre tu navegador y dirígete a `http://localhost:8501`.
+4. Open your browser and go to `http://localhost:8501`.
 
-## Ejecutar con Docker
+## Run with Docker
 
-1. Construye la imagen de Docker:
+1. Build the Docker image:
    ```bash
    docker build -t prompt-manager .
    ```
 
-2. Ejecuta el contenedor (montando un volumen para persistir la base de datos local):
+2. Run the container (mounting a volume to persist the local database):
    ```bash
    docker run -p 8501:8501 -v $(pwd):/app prompt-manager
    ```
-   > **Nota:** La base de datos `prompts.db` se creará dentro del contenedor. Si deseas que los datos se guarden en una ruta diferente, asegúrate de actualizar la variable `DB_NAME` en `app.py`. En el comando actual usamos un volumen mapeado a `/app/data`, por lo que es recomendable editar `app.py` así: `DB_NAME = "data/prompts.db"` para mantener los datos al reiniciar el contenedor.
+   > **Note:** The database `prompts.db` will be created inside the container. If you want the data to be saved in a different path, make sure to update the `DB_NAME` variable in `app.py`. In the current command we use a volume mapped to `/app/data`, so it is recommended to edit `app.py` like this: `DB_NAME = "data/prompts.db"` to keep the data when restarting the container.
