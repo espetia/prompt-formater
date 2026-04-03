@@ -39,6 +39,22 @@ def init_db():
         if col not in columns:
             c.execute(f"ALTER TABLE prompts ADD COLUMN {col} {data_type}")
             
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            template_name TEXT,
+            title TEXT,
+            category TEXT,
+            role TEXT,
+            context TEXT,
+            objective TEXT,
+            steps TEXT,
+            considerations TEXT,
+            output_format TEXT,
+            created_at TIMESTAMP
+        )
+    ''')
+            
     conn.commit()
     conn.close()
 
@@ -85,6 +101,51 @@ def get_prompt(prompt_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute('SELECT title, category, role, context, objective, steps, considerations, output_format FROM prompts WHERE id = ?', (prompt_id,))
+    row = c.fetchone()
+    conn.close()
+    return row
+
+def save_template(template_name, title, category, role, context, objective, steps, considerations, output_format):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    created_at = datetime.datetime.now()
+    c.execute('''
+        INSERT INTO templates (template_name, title, category, role, context, objective, steps, considerations, output_format, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (template_name, title, category, role, context, objective, steps, considerations, output_format, created_at))
+    conn.commit()
+    conn.close()
+
+def update_template(template_id, template_name, title, category, role, context, objective, steps, considerations, output_format):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('''
+        UPDATE templates 
+        SET template_name=?, title=?, category=?, role=?, context=?, objective=?, steps=?, considerations=?, output_format=?
+        WHERE id=?
+    ''', (template_name, title, category, role, context, objective, steps, considerations, output_format, template_id))
+    conn.commit()
+    conn.close()
+
+def delete_template(template_id):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('DELETE FROM templates WHERE id=?', (template_id,))
+    conn.commit()
+    conn.close()
+
+def get_all_templates():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('SELECT id, template_name FROM templates ORDER BY template_name ASC')
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def get_template(template_id):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('SELECT template_name, title, category, role, context, objective, steps, considerations, output_format FROM templates WHERE id = ?', (template_id,))
     row = c.fetchone()
     conn.close()
     return row
@@ -165,6 +226,10 @@ if st.sidebar.button("➕ Create New Prompt", use_container_width=True, type="pr
     st.session_state.current_prompt_id = None
     st.session_state.action = "create"
 
+if st.sidebar.button("📄 Manage Templates", use_container_width=True):
+    st.session_state.action = "manage_templates"
+    st.session_state.current_template_id = None
+
 st.sidebar.markdown("---")
 
 # Group Prompts by Category
@@ -193,26 +258,61 @@ if st.session_state.action in ["create", "edit"]:
     action_text = "Create New Prompt" if st.session_state.action == "create" else "Edit Prompt"
     st.header(f"✨ {action_text}")
     
-    # Pre-fill data if editing
-    p_title, p_cat, p_role, p_context, p_obj, p_steps, p_cons, p_out = ("", "", "", "", "", "", "", "Markdown Format")
-    if st.session_state.action == "edit" and st.session_state.current_prompt_id:
-        p_data = get_prompt(st.session_state.current_prompt_id)
-        if p_data:
-            p_title, p_cat, p_role, p_context, p_obj, p_steps, p_cons, p_out = p_data
+    if 'form_data' not in st.session_state:
+        st.session_state.form_data = {"t": "", "c": "", "r": "", "ctx": "", "o": "", "s": "", "cons": "", "out": "Markdown Format"}
+
+    # Determine default values on first load of the action
+    if 'last_action' not in st.session_state or st.session_state.last_action != st.session_state.action or ('last_prompt_id' not in st.session_state or st.session_state.last_prompt_id != st.session_state.current_prompt_id):
+        st.session_state.last_action = st.session_state.action
+        st.session_state.last_prompt_id = st.session_state.current_prompt_id
+        
+        if st.session_state.action == "edit" and st.session_state.current_prompt_id:
+            p_data = get_prompt(st.session_state.current_prompt_id)
+            if p_data:
+                st.session_state.form_data = {
+                    "t": p_data[0] or "", "c": p_data[1] or "", "r": p_data[2] or "", 
+                    "ctx": p_data[3] or "", "o": p_data[4] or "", "s": p_data[5] or "", 
+                    "cons": p_data[6] or "", "out": p_data[7] or "Markdown Format"
+                }
+        else:
+            st.session_state.form_data = {"t": "", "c": "", "r": "", "ctx": "", "o": "", "s": "", "cons": "", "out": "Markdown Format"}
+
+    templates = get_all_templates()
+    if templates:
+        template_options = {"": "Select a template..."}
+        for t in templates:
+            template_options[t[0]] = t[1]
+            
+        col_t1, col_t2 = st.columns([4, 1])
+        with col_t1:
+            selected_template = st.selectbox("Apply Template", options=list(template_options.keys()), format_func=lambda x: template_options[x], help="Select a template and click 'Load Template' to autofill fields below.")
+        with col_t2:
+            st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+            if st.button("Load Template", type="secondary"):
+                if selected_template:
+                    t_data = get_template(selected_template)
+                    if t_data:
+                        st.session_state.form_data = {
+                            "t": t_data[1] or st.session_state.form_data["t"], "c": t_data[2] or st.session_state.form_data["c"], 
+                            "r": t_data[3] or st.session_state.form_data["r"], "ctx": t_data[4] or st.session_state.form_data["ctx"], 
+                            "o": t_data[5] or st.session_state.form_data["o"], "s": t_data[6] or st.session_state.form_data["s"], 
+                            "cons": t_data[7] or st.session_state.form_data["cons"], "out": t_data[8] or st.session_state.form_data["out"]
+                        }
+                        st.success("Template loaded successfully!")
 
     with st.form("prompt_form"):
         col1, col2 = st.columns(2)
         with col1:
-            title = st.text_input("Prompt Title *", value=p_title, placeholder="Ex: Unit test generator")
-            role = st.text_input("AI Role", value=p_role, placeholder="Ex: You are a Senior Python Developer...")
+            title = st.text_input("Prompt Title *", value=st.session_state.form_data["t"], placeholder="Ex: Unit test generator")
+            role = st.text_input("AI Role", value=st.session_state.form_data["r"], placeholder="Ex: You are a Senior Python Developer...")
         with col2:
-            category = st.text_input("Category / Tag", value=p_cat, placeholder="Ex: Programming, Marketing, SEO")
-            output_format = st.text_input("Output Format *", value=p_out, help="Default is Markdown as requested.")
+            category = st.text_input("Category / Tag", value=st.session_state.form_data["c"], placeholder="Ex: Programming, Marketing, SEO")
+            output_format = st.text_input("Output Format *", value=st.session_state.form_data["out"], help="Default is Markdown as requested.")
             
-        context = st.text_area("Context", value=p_context, height=100, placeholder="Background situation or information the AI needs to know.")
-        objective = st.text_area("Objective *", value=p_obj, height=100, placeholder="What is the exact goal of this prompt?")
-        steps = st.text_area("Steps (Optional)", value=p_steps, height=120, placeholder="First do this...\nThen analyze...")
-        considerations = st.text_area("Considerations", value=p_cons, height=100, placeholder="Rules, restrictions, or what NOT to do.")
+        context = st.text_area("Context", value=st.session_state.form_data["ctx"], height=100, placeholder="Background situation or information the AI needs to know.")
+        objective = st.text_area("Objective *", value=st.session_state.form_data["o"], height=100, placeholder="What is the exact goal of this prompt?")
+        steps = st.text_area("Steps (Optional)", value=st.session_state.form_data["s"], height=120, placeholder="First do this...\nThen analyze...")
+        considerations = st.text_area("Considerations", value=st.session_state.form_data["cons"], height=100, placeholder="Rules, restrictions, or what NOT to do.")
         
         submit_text = "Save Prompt 🚀" if st.session_state.action == "create" else "Update Prompt 💾"
         submitted = st.form_submit_button(submit_text, type="primary")
@@ -275,3 +375,94 @@ elif st.session_state.action == "view" and st.session_state.current_prompt_id:
             if steps: st.markdown(f"**Steps:**\n{format_text_area(steps)}")
             if considerations: st.markdown(f"**Considerations:**\n{format_text_area(considerations)}")
             if output_format: st.markdown(f"**Output Format:**\n{output_format}")
+
+# ACTION: MANAGE TEMPLATES
+elif st.session_state.action == "manage_templates":
+    st.header("📄 Manage Templates")
+    st.markdown("Create and manage templates that can be used to quickly fill out prompts.")
+    
+    if 'template_action' not in st.session_state:
+        st.session_state.template_action = "list"
+        
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if st.button("⬅️ Back to Prompts"):
+            st.session_state.action = "create"
+            st.rerun()
+    with col2:
+        if st.session_state.template_action in ["list", "edit"] and st.button("➕ Create New Template", type="primary"):
+            st.session_state.template_action = "create"
+            st.session_state.current_template_id = None
+            st.rerun()
+            
+    st.divider()
+
+    if st.session_state.template_action in ["create", "edit"]:
+        t_action_text = "Create New Template" if st.session_state.template_action == "create" else "Edit Template"
+        st.subheader(f"✨ {t_action_text}")
+        
+        t_name, t_title, t_cat, t_role, t_ctx, t_obj, t_steps, t_cons, t_out = ("", "", "", "", "", "", "", "", "Markdown Format")
+        if st.session_state.template_action == "edit" and st.session_state.current_template_id:
+            t_data = get_template(st.session_state.current_template_id)
+            if t_data:
+                t_name, t_title, t_cat, t_role, t_ctx, t_obj, t_steps, t_cons, t_out = t_data
+
+        with st.form("template_form"):
+            template_name = st.text_input("Template Name *", value=t_name, placeholder="Ex: Standard Developer Prompt")
+            
+            st.markdown("### Template Fields")
+            st.caption("Leave fields blank if you don't want the template to overwrite them.")
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                title = st.text_input("Prompt Title", value=t_title)
+                role = st.text_input("AI Role", value=t_role)
+            with c2:
+                category = st.text_input("Category / Tag", value=t_cat)
+                output_format = st.text_input("Output Format", value=t_out)
+                
+            context = st.text_area("Context", value=t_ctx, height=80)
+            objective = st.text_area("Objective", value=t_obj, height=80)
+            steps = st.text_area("Steps", value=t_steps, height=80)
+            considerations = st.text_area("Considerations", value=t_cons, height=80)
+            
+            t_submit_text = "Save Template" if st.session_state.template_action == "create" else "Update Template"
+            t_submit = st.form_submit_button(t_submit_text, type="primary")
+            
+            if t_submit:
+                if template_name.strip() == "":
+                    st.error("⚠️ Template Name is required.")
+                else:
+                    if st.session_state.template_action == "create":
+                        save_template(template_name, title, category, role, context, objective, steps, considerations, output_format)
+                        st.success("✅ Template saved successfully!")
+                    else:
+                        update_template(st.session_state.current_template_id, template_name, title, category, role, context, objective, steps, considerations, output_format)
+                        st.success("✅ Template updated successfully!")
+                    st.session_state.template_action = "list"
+                    st.rerun()
+                    
+        if st.button("Cancel Template Editing", type="secondary"):
+            st.session_state.template_action = "list"
+            st.rerun()
+
+    elif st.session_state.template_action == "list":
+        templates = get_all_templates()
+        if not templates:
+            st.info("No templates found. Create one to get started!")
+        else:
+            for t in templates:
+                with st.container():
+                    tc1, tc2, tc3 = st.columns([6, 1, 1])
+                    with tc1:
+                        st.markdown(f"**{t[1]}**")
+                    with tc2:
+                        if st.button("✏️ Edit", key=f"edit_t_{t[0]}", use_container_width=True):
+                            st.session_state.current_template_id = t[0]
+                            st.session_state.template_action = "edit"
+                            st.rerun()
+                    with tc3:
+                        if st.button("🗑️ Delete", key=f"del_t_{t[0]}", type="primary", use_container_width=True):
+                            delete_template(t[0])
+                            st.rerun()
+                    st.divider()
