@@ -1,0 +1,9 @@
+.venv/
+venv/
+.idea/
+.streamlit/
+__pycache__/
+*.py[cod]
+*$py.class
+prompts.db
+data/
